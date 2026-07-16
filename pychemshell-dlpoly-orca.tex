@@ -1,0 +1,819 @@
+\documentclass[12pt,a4paper]{article}
+
+% ---------------------------------------------------------------------------
+% Packages
+% ---------------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+%mine
+\usepackage{url} % for breakable \path{} instead of \texttt{}
+\urlstyle{tt}
+% allow line breaks after hyphens in \path / \url
+% needs \makeatletter…\makeatother around it because of the @:
+\makeatletter
+\g@addto@macro\UrlBreaks{\do\-}
+\makeatother
+% chemical formula
+\usepackage{chemfig}
+% caption sizing
+\usepackage{caption}
+\captionsetup{labelfont=bf} % bold figure label
+
+% to force straight quotes ''' in \lst
+\usepackage{upquote}
+\usepackage{textcomp}
+
+% ---------------------------------------------------------------------------
+% Colours and listing styles
+% ---------------------------------------------------------------------------
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{cmdkey}{RGB}{0,80,160}
+\definecolor{comment}{RGB}{100,120,100}
+\definecolor{strclr}{RGB}{160,60,60}
+
+% changing dots line in toc, lof dflt=4.5
+% Make @ symbol a letter
+\makeatletter
+\renewcommand*\@dotsep{-0.5}
+% Make @ symbol an "other".
+\makeatother
+
+\lstdefinestyle{shell}{
+  upquote=true,
+  language=bash,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{cmdkey}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  stringstyle=\color{strclr},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{codeframe}{$\hookrightarrow$}\space},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=6pt,
+  framexleftmargin=6pt,
+}
+
+\lstdefinestyle{output}{
+  upquote=true,
+  backgroundcolor=\color{white},
+  basicstyle=\ttfamily\scriptsize,
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=6pt,
+}
+
+\lstdefinestyle{python}{
+  upquote=true,
+  language=Python,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{cmdkey}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  stringstyle=\color{strclr},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=6pt,
+}
+  
+% inline code shortcut
+\lstMakeShortInline[basicstyle=\ttfamily,columns=fullflexible]|
+
+% ---------------------------------------------------------------------------
+% Headers / footers
+% ---------------------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Py-ChemShell 25.0.6 on HIGGS}
+\rhead{\small\thepage}
+\lfoot{\small Py-ChemShell with DL\_POLY + ORCA}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Section spacing
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+
+% Handy boxed "note" environment
+\newcommand{\note}[1]{%
+  \par\vspace{4pt}\noindent
+  \fbox{\parbox{0.97\linewidth}{\small\textbf{Note.} #1}}%
+  \par\vspace{4pt}}
+
+% ---------------------------------------------------------------------------
+% Title
+% ---------------------------------------------------------------------------
+\title{\textbf{Py-ChemShell 25.0.6 installation on HIGGS\\[2pt]
+with DL\_POLY 5 and ORCA 6.1.0}}
+
+\author{
+\large A step-by-step guide for the philomath curious about QM/MM\\[4pt]
+\normalsize\texttt{Version 0.98}\\[4pt]
+\date{14\textsuperscript{th} July 2026}
+William \textsc{Houppy}\\[4pt]
+\normalsize\url{https://github.com/biochemix/pychemshell-dlpoly-orca}}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+\noindent
+This guide walks you through installing \textbf{Py-ChemShell 25.0.6} in your own
+account on the HIGGS high-performance computing (HPC) cluster, from the source
+\emph{tarball}, and using it to run a hybrid quantum-mechanics/molecular-mechanics
+(QM/MM) calculation. The quantum region is handled by \textbf{ORCA} and the
+molecular-mechanics region by \textbf{DL\_POLY~5}. Every command is shown
+explicitly, together with the output you should expect, so that you can follow
+along even if this is your first time using an HPC cluster. No administrator
+(\emph{root}) rights are required: everything is built in your home directory and
+loaded through the \emph{environment modules} system.
+\end{abstract}
+
+\tableofcontents
+\vspace{1em}
+
+% Start section numbering at 0 (Background is section 0)
+\setcounter{section}{-1}
+% Start figure numbering at 0
+\setcounter{figure}{-1}
+
+% ===========================================================================
+\section{Background: what are we installing, and why?}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+Many interesting chemical problems, for example how an enzyme catalyses a
+reaction, involve a small, chemically active region embedded in a very large
+environment. Treating \emph{everything} with quantum mechanics is far too
+expensive. The \textbf{QM/MM} approach solves this by describing only the reactive
+part with quantum mechanics (QM) and the surrounding bulk with cheaper
+molecular-mechanics (MM) force fields.
+
+\textbf{ChemShell} is the ``glue'' that couples a QM program to an MM program and
+drives the calculation (energies, geometry optimisations, and so on). In this
+guide we use three pieces of software:
+
+\begin{itemize}
+  \item \textbf{Py-ChemShell 25.0.6}: the Python version of ChemShell, the
+        driver that orchestrates the QM/MM calculation.
+  \item \textbf{ORCA 6.1.0}: the QM engine (already installed on HIGGS by the
+        administrators; we simply call it).
+  \item \textbf{DL\_POLY~5}: the MM engine, downloaded and compiled
+        automatically by the ChemShell installer.
+\end{itemize}
+
+% ===========================================================================
+\subsection{The HIGGS cluster in one paragraph}
+
+HIGGS is managed with \textbf{EasyBuild} and the \textbf{environment modules}
+system. Software is not installed system-wide; instead you \emph{load} the pieces
+you need for a session with the \texttt{module load} command, and they disappear again
+when you log out or run \texttt{module purge}. Jobs are submitted to compute nodes
+through the \textbf{SLURM} scheduler. The compute nodes each have 192 physical CPU
+cores (two sockets of 96 cores, no hyper-threading). A short \texttt{cpudebug}
+partition (maximum one hour) is available for quick tests, and we use it
+throughout this guide.
+
+\note{Throughout, \texttt{\$HOME} means your home directory (e.g.\
+\texttt{/hpcfs/home/<your-username>}) and \texttt{\$} at the start of a line
+is the shell prompt (you do \emph{not} type it).}
+
+% ===========================================================================
+\section{Obtaining and unpacking the tarball}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+Py-ChemShell is freely available and can be downloaded from its website (\url{https://www.chemshell.org}) as a tarball.
+A \emph{tarball} is a compressed archive (extension \texttt{.tar.gz})
+containing the ChemShell source code. Place it in a dedicated folder in your home
+directory. Here we assume it is already in \texttt{\$HOME/chemshell/}.\\
+
+\begin{lstlisting}[style=shell]
+# 1. Move into a working folder for ChemShell
+cd $HOME/chemshell
+
+# 2. Check the tarball is there (about 35 MB)
+ls -lh chemsh-py-25.0.6.tar.gz
+
+# 3. Unpack it
+tar xzf chemsh-py-25.0.6.tar.gz
+
+# 4. Enter the source directory that was created
+cd chemsh-py-25.0.6
+ls
+\end{lstlisting}
+
+You should see the top-level contents of the distribution:
+
+\begin{lstlisting}[style=output]
+AUTHORS  chemsh  COPYING  COPYING.LESSER  docs  INSTALL  README.md  setup  tests
+\end{lstlisting}
+
+The \texttt{setup} script is the installer; the \texttt{tests} folder
+contains ready-made examples that we will reuse later.
+
+\note{Always unpack into a \emph{clean} directory. If you have to start over,
+delete the \texttt{chemsh-py-25.0.6} folder and unpack the tarball again,
+rather than building on top of a half-finished attempt.}
+
+% ===========================================================================
+\section{Loading and checking the environment modules}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+Before building anything we choose a consistent set of compilers and libraries.
+We use the \textbf{\texttt{foss/2024a}} toolchain (Free and Open-Source
+Software): GCC 13.3.0, OpenMPI 5.0.3, and the OpenBLAS/FlexiBLAS, FFTW and
+ScaLAPACK maths libraries. ChemShell also needs Python $\geq 3.10$, which is a
+separate module.
+
+% ===========================================================================
+\subsection{Start from a clean environment}
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+module purge
+module load foss/2024a
+module list
+\end{lstlisting}
+\end{minipage}
+
+\texttt{module list} should show the toolchain components, including
+\texttt{GCC/13.3.0}, \path{OpenMPI/5.0.3}, \texttt{OpenBLAS/0.3.27},
+\texttt{FlexiBLAS/3.4.4}, \texttt{FFTW/3.3.10} and
+\texttt{ScaLAPACK/2.2.0-fb}.
+
+% ===========================================================================
+\subsection{Add a suitable Python}
+
+The Python built for the \emph{same} compiler core (\texttt{GCCcore-13.3.0})
+keeps everything consistent:\\
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+module load Python/3.12.3-GCCcore-13.3.0
+which python3
+python3 --version        # must report 3.12.3, NOT the system 3.9
+\end{lstlisting}
+\end{minipage}
+
+\note{Loading Python may print an \emph{Lmod} warning that a few small helper
+modules (\texttt{XZ}, \texttt{binutils}, \texttt{zlib}) were reloaded to
+their \texttt{GCCcore-13.3.0} versions. This is harmless: the module system
+is simply keeping the compiler chain consistent.}
+
+% =========================================================================== 
+\subsection{Locate ORCA}
+
+ORCA is pre-installed. Find its module and the full path to the executable:
+
+\begin{lstlisting}[style=shell]
+module avail orca
+# Expected: ORCA/6.1.0-gompi-2023b-avx2
+\end{lstlisting}
+
+The important detail for later: this ORCA was built with a \emph{different}
+toolchain (\path{gompi-2023b}, i.e.\ OpenMPI 4.1.6), not the OpenMPI 5.0.3 we
+build ChemShell against. We will handle that carefully in Section~\ref{sec:parallel}.
+For now, simply record the executable's absolute path:
+
+\begin{lstlisting}[style=shell]
+module load ORCA/6.1.0-gompi-2023b-avx2
+which orca
+# /hpcfs/software/EasyBuild/easybuild/software/ORCA/6.1.0-gompi-2023b-avx2/bin/orca
+module unload ORCA/6.1.0-gompi-2023b-avx2   # unload again before building ChemShell
+\end{lstlisting}
+
+% =========================================================================== 
+\subsection{Check the compilers and library paths}
+
+EasyBuild sets convenient variables (\texttt{\$EBROOT...}) pointing at each
+library. Confirm the MPI compiler wrappers and the maths libraries resolve:
+
+\begin{lstlisting}[style=shell]
+which mpif90 mpicc mpicxx
+echo $EBROOTFLEXIBLAS
+echo $EBROOTFFTW
+echo $EBROOTSCALAPACK
+ls $EBROOTFLEXIBLAS/lib*/libflexiblas.so
+\end{lstlisting}
+
+The \texttt{mpif90}/\texttt{mpicc}/\texttt{mpicxx} wrappers should live
+under \path{OpenMPI/5.0.3-GCC-13.3.0/bin}, and
+\texttt{libflexiblas.so} should exist (it is present under both
+\texttt{lib} and \texttt{lib64}; we use the \texttt{lib} copy).
+
+% ===========================================================================
+\section{Patching the installer (one small fix)}
+\label{sec:patch}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+The installer's default compilers are Intel (\texttt{ifort}/\texttt{icx}).
+We are using GCC, and we must also enable MPI. On this version there is a small
+bug in the installer: when MPI is switched on, one line looks up a dictionary with
+a text key instead of a true/false value, which crashes the script with a
+\texttt{KeyError}.
+
+The fix is a one-character-level change: wrap the lookup in \texttt{bool(...)}.
+A robust way to apply it (independent of the exact line number) is:
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+# Show the offending line first (optional)
+grep -n "bools\[args.mpi\]" setup
+
+# Apply the fix
+sed -i "s/bools\[args.mpi\]/bools[bool(args.mpi)]/" setup
+
+# Confirm it is now bools[bool(args.mpi)]
+grep -n "bools\[bool(args.mpi)\]" setup
+\end{lstlisting}
+\end{minipage}
+
+\note{This is a genuine upstream bug and should be reported to the ChemShell
+developers. It does not affect the correctness of your results: it only
+prevents the installer from running until patched.}
+
+% ===========================================================================
+\section{Configuring and building Py-ChemShell}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+Now build ChemShell together with DL\_POLY~5. The installer downloads DL\_POLY
+from its official repository and compiles it automatically. ORCA is \emph{not}
+built here. It is an external program we call at run time, so it needs no
+\path{--orca} flag.
+
+Make sure \texttt{foss/2024a} and the Python module are loaded (and ORCA is
+\emph{not} loaded), then run:
+
+\begin{lstlisting}[style=shell]
+./setup \
+  -fc mpif90 -cc mpicc -cpc mpicxx \
+  -mpi=openmpi \
+  --python_root_dir $EBROOTPYTHON \
+  --blas   $EBROOTFLEXIBLAS/lib/libflexiblas.so \
+  --lapack $EBROOTFLEXIBLAS/lib/libflexiblas.so \
+  --fftw   $EBROOTFFTW \
+  --scalapack \
+  --dl_poly \
+  -j 4
+\end{lstlisting}
+
+What each part means:
+\begin{itemize}[nosep]
+  \item \texttt{-fc/-cc/-cpc} --- the Fortran, C and C++ MPI compiler wrappers.
+  \item \texttt{-mpi=openmpi} --- build with MPI parallel support.
+  \item \texttt{-\hspace{0mm}-python\_root\_dir \$EBROOTPYTHON} --- forces the correct Python
+        3.12, not the old system Python.
+  \item \texttt{-\hspace{0mm}-blas / -\hspace{0mm}-lapack} --- point at FlexiBLAS (our maths library).
+  \item \texttt{-\hspace{0mm}-fftw / -\hspace{0mm}-scalapack} --- fast Fourier transforms and scalable
+        linear algebra.
+  \item \texttt{-\hspace{0mm}-dl\_poly} --- download and build the DL\_POLY~5 MM engine.
+  \item \texttt{-j 4} --- compile using 4 parallel jobs (faster).
+\end{itemize}
+
+\phantom{i} % trick for blank line
+
+The build takes a couple of minutes. Some warnings scroll past (for example
+type-mismatch warnings in \texttt{dlf\_mpi.f90}, an \texttt{executable stack} note,
+and two \texttt{not an ac\-ces\-si\-ble directory} warnings about the BLAS/LAPACK paths).
+These are all \textbf{harmless}. The build has finished successfully when you see
+progress reach 100\% and a line similar to:
+
+\begin{lstlisting}[style=output]
+[100%] Built target namd
+
+ >>> Time used for building: 109.447 s
+\end{lstlisting}
+
+% ===========================================================================
+\section{Verifying the build}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+Check that the three key products exist and that the driver runs:
+
+\begin{lstlisting}[style=shell]
+ls -lh bin/gnu/chemsh.x bin/gnu/chemsh
+ls -lh build/gnu/lib/libdl_poly.so
+./bin/gnu/chemsh -v
+\end{lstlisting}
+
+The last command should print:
+
+\begin{lstlisting}[style=output]
+chemsh: ChemShell version 25.0
+\end{lstlisting}
+
+If you see the version string, Py-ChemShell is installed. \texttt{chemsh} is a
+small launcher script; \texttt{chemsh.x} is the compiled program; and
+\texttt{libdl\_poly.so} is the DL\_POLY interface library that ChemShell calls
+in-process.
+
+% ===========================================================================
+\section{A first QM/MM test (serial)}
+\label{sec:serial}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+We start with a small, \emph{serial} (single-core) test to confirm the whole
+chain (ChemShell $\rightarrow$ ORCA $\rightarrow$ DL\_POLY) works. Rather
+than invent a system, we reuse a \emph{validated} example shipped in the
+\texttt{tests} folder (an $n$-butanol molecule) and simply swap the QM engine
+to ORCA. Because the example has a known reference energy, a correct result is
+easy to recognise.
+
+\begin{figure}[ht]
+\centering
+\setchemfig{atom sep=2.4em}
+\chemfig{
+  H-C(-[2]H)(-[6]H)-C(-[2]H)(-[6]H)-C(-[2]H)(-[6]H)%
+  -[,,,,blue,line width=2.5pt]%
+  \textcolor{red}{C}(-[2,,,,red]\textcolor{red}{H})(-[6,,,,red]\textcolor{red}{H})%
+  -[,,,,red]\textcolor{red}{\charge{[extra sep=3pt]90=\:,270=\:}{O}}%
+  -[,,,,red]\textcolor{red}{H}
+}
+\captionsetup{width=0.70\textwidth}
+\caption{QM/MM partition of butanol-1.\\ The atoms and bonds are drawn in \textcolor{red}{\textbf{red}}
+in the \textcolor{red}{\textbf{QM region}} (\texttt{qm\_region=range(5)}): the carbinol
+carbon, its two hydrogens and the hydroxyl O--H, treated by ORCA. The propyl tail in \textbf{black} is the \textbf{MM region}, treated by DL\_POLY. The thick \textcolor{blue}{\textbf{blue}} bond joining the two carbons is the \textcolor{blue}{\textbf{QM/MM
+boundary in mechanical embedding}} in which the interaction across the cut is handled
+entirely by classical force field.}
+\label{fig:butanol_qmmm}
+\end{figure}
+
+% ===========================================================================
+\subsection{Set up a test directory}
+
+\begin{lstlisting}[style=shell]
+mkdir -p $HOME/chemshell/qmmm_test
+cd $HOME/chemshell/qmmm_test
+
+# Copy the shipped geometry and force field
+cp $HOME/chemshell/chemsh-py-25.0.6/tests/qmmm/butanol.cjson .
+cp $HOME/chemshell/chemsh-py-25.0.6/tests/qmmm/nwchem-dl_poly/butanol.ff .
+\end{lstlisting}
+
+% =========================================================================== 
+\subsection{Write the ChemShell input}
+
+Create the file \texttt{butanol\_orca\_dlpoly.py} by pasting this whole block into
+the terminal:
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+cat > butanol_orca_dlpoly.py << 'EOF'
+from chemsh import *
+
+# Load the molecule (geometry supplied with ChemShell)
+frag = Fragment(coords='butanol.cjson')
+
+# QM engine: ORCA, Hartree-Fock with a small basis, run on 1 core
+qm = ORCA(method="hf", basis="6-31g", nprocs=1)
+
+# MM engine: DL_POLY, using the shipped force field
+mm = DL_POLY(ff='butanol.ff', rcut=100.0)
+
+# Couple them: first 5 atoms are the QM region, mechanical embedding
+qmmm = QMMM(frag=frag, qm_region=range(5), qm=qm, mm=mm, embedding='mechanical')
+
+# One geometry optimisation
+opt = Opt(theory=qmmm, algorithm="lbfgs", tolerance=0.0003, 
+          maxcycle=300, maxene=400, trust_radius='energy')
+opt.run()
+
+print("QM/MM optimised energy =", opt.result.energy, "Hartree")
+EOF
+\end{lstlisting}
+\end{minipage}
+
+% =========================================================================== 
+\subsection{Write the SLURM job script}
+
+Because ORCA is run on a single core here, there is no MPI to worry about yet: we only need ORCA on the \texttt{PATH} and its own library directory on \texttt{LD\_LIBRARY\_PATH}. Create \texttt{run\_qmmm.slurm} by pasting this block into the terminal:\\
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+cat > run_qmmm.slurm << 'EOF'
+#!/bin/bash --login
+#SBATCH --job-name=qmmm_smoke
+#SBATCH --partition=cpudebug
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=00:20:00
+#SBATCH --output=qmmm_smoke.%j.out
+
+# ChemShell build environment
+module purge
+module load foss/2024a Python/3.12.3-GCCcore-13.3.0
+
+# Point at ORCA (executable + its own libraries). Do NOT module-load ORCA here.
+ORCADIR=/hpcfs/software/EasyBuild/easybuild/software/ORCA/6.1.0-gompi-2023b-avx2
+export PATH=$ORCADIR/bin:$PATH
+export LD_LIBRARY_PATH=$ORCADIR/lib:$LD_LIBRARY_PATH
+
+CHEMSH=$HOME/chemshell/chemsh-py-25.0.6/bin/gnu/chemsh
+
+cd $SLURM_SUBMIT_DIR
+$CHEMSH butanol_orca_dlpoly.py > butanol_orca_dlpoly.log 2>&1
+echo "chemsh exit=$?"
+EOF
+\end{lstlisting}
+\end{minipage}
+
+% =========================================================================== 
+\subsection{Submit and check}
+
+\begin{lstlisting}[style=shell]
+sbatch run_qmmm.slurm
+squeue -u $USER            # watch it run (a minute or so)
+\end{lstlisting}
+
+When it finishes, inspect the results:
+
+\begin{lstlisting}[style=shell]
+cat qmmm_smoke.*.out
+tail -5 butanol_orca_dlpoly.log
+\end{lstlisting}
+
+A successful run prints \texttt{chemsh exit=0} and an energy very close to the
+ORCA reference value of $-114.99042281$~Hartree, for example:
+
+\begin{lstlisting}[style=output]
+=== QM/MM optimised energy = [-114.99042314] Hartree ===
+ ChemShell exiting normally.
+\end{lstlisting}
+
+Agreement to within about $3\times10^{-7}$ Hartree confirms the full chain works.
+
+% ===========================================================================
+\section{Setting up Py-ChemShell with parallel ORCA (bu\-ta\-nol-1 example)}
+\label{sec:parallel}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+In real QM/MM work, the QM calculation dominates the run time (often around
+95\%), so we want ORCA to use many CPU cores. This section works through a
+complete parallel example on the same butanol-1 system used in
+Section~\ref{sec:serial}, so you can compare the two directly. It introduces one
+subtlety that must be handled correctly, then gives every file you need.
+
+% =========================================================================== 
+\subsection{Why a wrapper script is needed}
+
+ChemShell was built against \textbf{OpenMPI 5.0.3}, but ORCA was built against
+\textbf{OpenMPI 4.1.6}. Both provide a library with the \emph{same} file name
+(\texttt{libmpi.so.40}). If both versions were visible at once, ChemShell could
+accidentally pick up ORCA's 4.1.6 and misbehave in ways that are hard to
+diagnose.
+
+The clean solution is to give each program its own private environment. We keep
+ChemShell in the \texttt{foss/2024a} environment, and we launch ORCA through a
+small \textbf{wrapper script} that loads ORCA's own modules \emph{inside a
+separate subprocess}. The two never see each other's MPI.
+
+Create \texttt{orca\_parallel.sh} in the test directory and make it executable
+by pasting this block into the terminal:
+
+\begin{lstlisting}[style=shell]
+cat > orca_parallel.sh << 'EOF'
+#!/bin/bash --login
+# Isolated launcher: ORCA gets its OWN OpenMPI 4.1.6 environment,
+# separate from the ChemShell process that called it.
+module purge
+module load ORCA/6.1.0-gompi-2023b-avx2
+
+# ORCA needs its full absolute path to spawn MPI workers correctly:
+exec /hpcfs/software/EasyBuild/easybuild/software/ORCA/6.1.0-gompi-2023b-avx2/bin/orca "$@"
+EOF
+\end{lstlisting}
+
+\begin{lstlisting}[style=shell]
+chmod +x orca_parallel.sh
+\end{lstlisting}
+
+% =========================================================================== 
+\subsection{Tell ChemShell to use the wrapper}
+
+Create a parallel version of the input, \texttt{butanol\_orca\_dlpoly\_par.py}.
+The only changes from the serial version are (i) \texttt{path} points at the
+wrapper, and (ii) the number of ORCA ranks is read from SLURM automatically (see
+Section~\ref{sec:onenumber}). Paste this block into the terminal:\\
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+cat > butanol_orca_dlpoly_par.py << 'EOF'
+import os
+from chemsh import *
+
+# Number of ORCA MPI ranks, taken from the SLURM job (falls back to 1)
+norca = int(os.environ.get('SLURM_NTASKS', 1))
+
+frag = Fragment(coords='butanol.cjson')
+
+qm = ORCA(method="hf", basis="6-31g",
+          path="./orca_parallel.sh",   # launch ORCA through the wrapper
+          nprocs=norca)                # run ORCA in parallel
+
+mm = DL_POLY(ff='butanol.ff', rcut=100.0)
+
+qmmm = QMMM(frag=frag, qm_region=range(5), qm=qm, mm=mm,
+            embedding='mechanical')
+
+opt = Opt(theory=qmmm, algorithm="lbfgs", tolerance=0.0003,
+          maxcycle=300, maxene=400, trust_radius='energy')
+opt.run()
+
+print("QM/MM optimised energy =", opt.result.energy, "Hartree")
+EOF
+\end{lstlisting}
+\end{minipage}
+
+\note{In this setup ChemShell runs as a single process and calls DL\_POLY
+in-process (through \texttt{libdl\_poly.so}), while only ORCA runs in parallel.
+The QM and MM steps happen one after another, not at the same time, so you do
+\emph{not} need to divide cores between ORCA and DL\_POLY: you simply size the
+job for ORCA.}
+
+% =========================================================================== 
+\subsection{One setting for the core count: passing it via SLURM}
+
+\label{sec:onenumber}
+
+It is easy to make mistakes if the number of cores is typed in two places (the
+job script and the ChemShell input). We avoid this by setting it \textbf{once} in
+the SLURM script. SLURM automatically exports \path{--ntasks} as the
+environment variable \texttt{\$SLURM\_NTASKS}, and our Python input reads that
+variable (the \path{os.environ.get(}\texttt{\textquotesingle SLURM\_NTASKS\textquotesingle}\texttt{, 1)} line above).\\
+
+Create the parallel job script \texttt{run\_qmmm\_par.slurm} by pasting this block
+into the terminal:
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[style=shell]
+cat > run_qmmm_par.slurm << 'EOF'
+#!/bin/bash --login
+#SBATCH --job-name=qmmm_par
+#SBATCH --partition=cpudebug
+#SBATCH --nodes=1
+#SBATCH --ntasks=4               # <-- the ONLY place the core count is set
+#SBATCH --time=00:20:00
+#SBATCH --output=qmmm_par.%j.out
+
+# ChemShell environment only (OpenMPI 5.0.3). ORCA's 4.1.6 is loaded
+# separately, inside orca_parallel.sh.
+module purge
+module load foss/2024a Python/3.12.3-GCCcore-13.3.0
+
+CHEMSH=$HOME/chemshell/chemsh-py-25.0.6/bin/gnu/chemsh
+
+echo "ORCA ranks (SLURM_NTASKS) = $SLURM_NTASKS"
+cd $SLURM_SUBMIT_DIR
+$CHEMSH butanol_orca_dlpoly_par.py > butanol_orca_dlpoly_par.log 2>&1
+echo "chemsh exit=$?"
+EOF
+\end{lstlisting}
+\end{minipage}
+
+To change the number of cores later, edit only the \path{--ntasks} line and
+the value flows automatically into ORCA. Because \texttt{-\hspace{0mm}-nodes=1} places all
+the tasks on a single node, \texttt{-\hspace{0mm}-ntasks=4} already reserves the four
+``slots'' on that node for ORCA's internal \texttt{mpirun}, so no
+\texttt{-\hspace{0mm}-ntasks-per-node} line is needed.
+
+% =========================================================================== 
+\subsection{Submit and check}
+
+\begin{lstlisting}[style=shell]
+sbatch run_qmmm_par.slurm
+squeue -u $USER
+\end{lstlisting}
+
+After it finishes:
+
+\begin{lstlisting}[style=shell]
+cat qmmm_par.*.out
+tail -5 butanol_orca_dlpoly_par.log
+\end{lstlisting}
+
+You should again get \texttt{chemsh exit=0} and the same energy
+($\approx -114.99042$~Hartree) as the serial run: the correct answer, now with ORCA
+running on several cores.
+
+\note{Parallel run is far slower than serial on a tiny test. This is expected for
+very small systems: parallel overhead dominates. Benchmark on a realistic-sized
+molecule instead.}
+
+\noindent % avoid page break inside
+\begin{minipage}{\linewidth}
+
+% =========================================================================== 
+\subsection{Recap: the five files for the parallel butanol-1 example}
+
+For reference, a complete parallel QM/MM run of butanol-1 uses these files, all
+in \path{$HOME/chemshell/qmmm_test}:\\
+
+\begin{itemize}
+  \item \texttt{butanol.cjson}: the geometry, copied from the shipped tests
+        (Section~\ref{sec:serial}).
+  \item \texttt{butanol.ff}: the force field, copied from the shipped tests
+        (Section~\ref{sec:serial}).
+  \item \texttt{orca\_parallel.sh}: the wrapper that gives ORCA its own MPI
+        environment.
+  \item \texttt{butanol\_orca\_dlpoly\_par.py}: the ChemShell input, which calls
+        ORCA through the wrapper and reads the rank count from
+        \texttt{\$SLURM\_NTASKS}.
+  \item \texttt{run\_qmmm\_par.slurm}: the job script, where \path{--ntasks}
+        is the single place you choose how many cores ORCA uses.
+\end{itemize}
+
+To run more cores, change only \path{--ntasks} then restart with \texttt{sbatch run\_qmmm\_par.slurm}.
+
+\end{minipage}
+
+% ===========================================================================
+\section{Summary}
+% ===========================================================================
+\setcounter{subsection}{-1}
+
+You have:
+\begin{enumerate}
+  \item unpacked the Py-ChemShell 25.0.6 tarball into your home directory;
+  \item loaded a consistent open-source toolchain (\texttt{foss/2024a}) plus a
+        suitable Python;
+  \item applied the one required fix to the installer;
+  \item built Py-ChemShell together with DL\_POLY~5;
+  \item verified the build and ran a validated serial QM/MM test with ORCA;
+  \item set up parallel ORCA cleanly using an isolating wrapper script; and
+  \item driven the core count from a single SLURM setting.
+\end{enumerate}
+
+Your installation uses only open-source components for ChemShell and DL\_POLY, and
+calls the pre-installed ORCA as an external program: a robust, reproducible
+setup for QM/MM chemistry on HIGGS.
+
+\phantom{i} % trick for line space
+
+It does not yet exercise electrostatic embedding, link-atom QM/MM boundaries, or periodic MM electrostatics (Ewald/PME), which a protein/water run requires. These are features of the installed stack rather than new software, but remain untested in this build. A small electrostatic-embedding and link-atom test would confirm those code paths before production enzyme calculations. Actual larger QM/MM experiments would have to be carefully configured and tuned with the optimal number of CPU cores.
+
+\newpage
+
+% ===========================================================================
+\appendix
+\section{Troubleshooting}
+% ===========================================================================
+
+\phantom{i} % trick for line space
+
+\begin{itemize}[leftmargin=1.2em]
+  \item \textbf{The installer stops with} \texttt{KeyError:\textquotesingle openmpi\textquotesingle} \textbf{during}         \texttt{./setup}\textbf{.}\\
+        The installer was not patched. Apply the \texttt{sed} fix in
+        Section~\ref{sec:patch} and run \texttt{./setup} again.
+
+  \item \textbf{CMake reports} \texttt{Could NOT find Python3}
+        \textbf{or a} \texttt{Wrong version} \textbf{message.}\\
+        The Python module was not loaded, so the installer found the old system
+        Python 3.9. Load \texttt{Python/3.12.3-GCCcore-13.3.0} and pass
+        \texttt{-\hspace{0mm}-python\_root\_dir} \texttt{\$EBROOTPYTHON} to \texttt{./setup}.
+
+  \item \textbf{The parallel ORCA job aborts during} \texttt{Startup}
+        \textbf{with a} \texttt{not enough slots} \textbf{message.}\\
+        SLURM did not reserve enough slots. With \path{--nodes=1}, make sure
+        \path{--ntasks} equals the number of ORCA ranks you asked for (the
+        \texttt{nprocs} value ORCA uses).
+
+  \item \textbf{You want to start the build again from scratch.}\\
+        Run \texttt{./setup -\hspace{0mm}-clean} in the source directory, or delete the
+        \texttt{chemsh-py-25.0.6} folder and re-unpack the tarball.
+\end{itemize}
+
+\end{document}

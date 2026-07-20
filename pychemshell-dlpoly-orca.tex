@@ -127,8 +127,8 @@ with DL\_POLY 5 and ORCA 6.1.0}}
 
 \author{
 \large A step-by-step guide for the philomath curious about QM/MM\\[4pt]
-\normalsize\texttt{Version 0.98}\\[4pt]
-\date{14\textsuperscript{th} July 2026}
+\normalsize\texttt{Version 0.98.1}\\[4pt]
+\date{20\textsuperscript{th} July 2026}
 William \textsc{Houppy}\\[4pt]
 \normalsize\url{https://github.com/biochemix/pychemshell-dlpoly-orca}}
 
@@ -376,9 +376,9 @@ Make sure \texttt{foss/2024a} and the Python module are loaded (and ORCA is
   -fc mpif90 -cc mpicc -cpc mpicxx \
   -mpi=openmpi \
   --python_root_dir $EBROOTPYTHON \
-  --blas   $EBROOTFLEXIBLAS/lib/libflexiblas.so \
+  --blas $EBROOTFLEXIBLAS/lib/libflexiblas.so \
   --lapack $EBROOTFLEXIBLAS/lib/libflexiblas.so \
-  --fftw   $EBROOTFFTW \
+  --fftw $EBROOTFFTW \
   --scalapack \
   --dl_poly \
   -j 4
